@@ -1,0 +1,30 @@
+{
+  "rows_in": 2516,
+  "features_used": [
+    "age",
+    "sex",
+    "chest_pain",
+    "resting_bp",
+    "cholesterol",
+    "fasting_bs",
+    "max_hr",
+    "exercise_angina",
+    "bmi",
+    "smoking"
+  ],
+  "features_missing_from_data": [],
+  "dropped_missing_target": 0,
+  "dropped_duplicates": 16,
+  "impossible_values_set_to_nan": {
+    "resting_bp": 7,
+    "cholesterol": 13
+  },
+  "missing_values_remaining": {
+    "resting_bp": 57,
+    "cholesterol": 60,
+    "max_hr": 53,
+    "bmi": 43
+  },
+  "rows_out": 2500,
+  "prevalence": 0.4564
+}
