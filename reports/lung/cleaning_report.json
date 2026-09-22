@@ -1,0 +1,28 @@
+{
+  "rows_in": 2500,
+  "features_used": [
+    "age",
+    "sex",
+    "smoking",
+    "yellow_fingers",
+    "chronic_disease",
+    "fatigue",
+    "wheezing",
+    "alcohol",
+    "coughing",
+    "shortness_of_breath",
+    "swallowing_difficulty",
+    "chest_pain"
+  ],
+  "features_missing_from_data": [],
+  "dropped_missing_target": 0,
+  "dropped_duplicates": 0,
+  "impossible_values_set_to_nan": {
+    "age": 8
+  },
+  "missing_values_remaining": {
+    "age": 31
+  },
+  "rows_out": 2500,
+  "prevalence": 0.3948
+}

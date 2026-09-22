@@ -1,0 +1,24 @@
+{
+  "rows_in": 6036,
+  "features_used": [
+    "age",
+    "sex",
+    "hypertension",
+    "heart_disease",
+    "avg_glucose_level",
+    "bmi",
+    "smoking_status"
+  ],
+  "features_missing_from_data": [],
+  "dropped_missing_target": 0,
+  "dropped_duplicates": 45,
+  "impossible_values_set_to_nan": {
+    "bmi": 13
+  },
+  "missing_values_remaining": {
+    "bmi": 243,
+    "smoking_status": 842
+  },
+  "rows_out": 5991,
+  "prevalence": 0.0574
+}

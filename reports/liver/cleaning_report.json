@@ -1,0 +1,29 @@
+{
+  "rows_in": 2515,
+  "features_used": [
+    "age",
+    "sex",
+    "alcohol_use",
+    "total_bilirubin",
+    "direct_bilirubin",
+    "alk_phos",
+    "alt",
+    "ast",
+    "total_protein",
+    "albumin",
+    "ag_ratio"
+  ],
+  "features_missing_from_data": [],
+  "dropped_missing_target": 0,
+  "dropped_duplicates": 15,
+  "impossible_values_set_to_nan": {
+    "alt": 5
+  },
+  "missing_values_remaining": {
+    "alt": 31,
+    "albumin": 24,
+    "ag_ratio": 30
+  },
+  "rows_out": 2500,
+  "prevalence": 0.436
+}

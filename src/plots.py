@@ -87,18 +87,23 @@ def contribution_figure(contribs, labels, base_pct: float, prob_pct: float):
 
 
 def gauge_figure(prob: float, thresholds):
-    """A slim horizontal 'risk bar' with Low / Medium / High zones and a marker."""
-    fig, ax = plt.subplots(figsize=(6.5, 1.1))
+    """A slim horizontal 'risk bar' with Low / Medium / High zones and a marker.
+    The axis is zoomed for rare outcomes (e.g. stroke, bands at 5% / 15%) so the zones stay readable."""
     t0, t1 = thresholds
-    for lo, hi, c in [(0, t0, PALETTE["low"]), (t0, t1, PALETTE["medium"]), (t1, 1, PALETTE["high"])]:
+    xmax = 1.0 if t1 > 0.4 else 0.5 if t1 > 0.1 else 0.25
+    shown = min(prob, xmax)
+    fig, ax = plt.subplots(figsize=(6.5, 1.1))
+    for lo, hi, c in [(0, t0, PALETTE["low"]), (t0, t1, PALETTE["medium"]), (t1, xmax, PALETTE["high"])]:
         ax.barh(0, (hi - lo) * 100, left=lo * 100, color=c, alpha=0.85, height=0.5)
-    ax.plot([prob * 100], [0], marker="v", color="black", markersize=14, mec="white", zorder=5)
-    ax.set_xlim(0, 100), ax.set_ylim(-0.6, 0.6)
+    ax.plot([shown * 100], [0], marker="v", color="black", markersize=14, mec="white", zorder=5)
+    ax.set_xlim(0, xmax * 100), ax.set_ylim(-0.6, 0.6)
     ax.set_yticks([])
-    ax.set_xticks([0, t0 * 100, t1 * 100, 100])
-    ax.set_xticklabels(["0%", f"{t0:.0%}", f"{t1:.0%}", "100%"], fontsize=8)
-    for s in ("top", "right", "left"):
-        ax.spines[s].set_visible(False)
+    ticks = [0, t0 * 100, t1 * 100, xmax * 100]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f"{t:.0f}%" for t in ticks[:-1]] + [f"{xmax * 100:.0f}%+" if xmax < 1 else "100%"],
+                       fontsize=8)
+    for sp in ("top", "right", "left"):
+        ax.spines[sp].set_visible(False)
     fig.tight_layout()
     return fig
 
@@ -118,7 +123,7 @@ def plot_eda(df, cfg, outdir):
     _save(fig, outdir / "eda_class_balance.png")
 
     ncols = 3
-    nrows = int(np.ceil(len(numeric) / ncols))
+    nrows = max(1, int(np.ceil(len(numeric) / ncols)))
     fig, axes = plt.subplots(nrows, ncols, figsize=(11, 3.2 * nrows))
     for ax, col in zip(np.atleast_1d(axes).ravel(), numeric):
         sns.kdeplot(data=df, x=col, hue=target, fill=True, common_norm=False, ax=ax,
@@ -131,15 +136,19 @@ def plot_eda(df, cfg, outdir):
     fig.suptitle("Distributions by outcome (green = no disease, red = disease)", y=1.0)
     _save(fig, outdir / "eda_distributions.png")
 
-    fig, ax = plt.subplots(figsize=(7.5, 6))
+    n_cols = df.shape[1]
+    fig, ax = plt.subplots(figsize=(max(7.5, 0.55 * n_cols), max(6, 0.5 * n_cols)))
     sns.heatmap(df.corr(numeric_only=True), annot=True, fmt=".2f", cmap="coolwarm", center=0,
                 square=True, cbar_kws={"shrink": 0.7}, ax=ax, annot_kws={"size": 7})
     ax.set_title("Correlation matrix")
     _save(fig, outdir / "eda_correlation.png")
 
     cats = [f for f in cfg.features if f.kind in ("category", "binary") and f.name in df.columns]
+    if not cats:
+        matplotlib.rcdefaults()
+        return
     ncols = 3
-    nrows = int(np.ceil(len(cats) / ncols))
+    nrows = max(1, int(np.ceil(len(cats) / ncols)))
     fig, axes = plt.subplots(nrows, ncols, figsize=(11, 3.3 * nrows))
     for ax, spec in zip(np.atleast_1d(axes).ravel(), cats):
         rate = df.groupby(spec.name)[target].mean() * 100

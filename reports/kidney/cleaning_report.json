@@ -1,0 +1,34 @@
+{
+  "rows_in": 2515,
+  "features_used": [
+    "age",
+    "blood_pressure",
+    "specific_gravity",
+    "albumin",
+    "blood_glucose",
+    "blood_urea",
+    "serum_creatinine",
+    "hemoglobin",
+    "hypertension",
+    "diabetes",
+    "anemia",
+    "pedal_edema"
+  ],
+  "features_missing_from_data": [],
+  "dropped_missing_target": 0,
+  "dropped_duplicates": 15,
+  "impossible_values_set_to_nan": {
+    "serum_creatinine": 16
+  },
+  "missing_values_remaining": {
+    "blood_pressure": 74,
+    "specific_gravity": 173,
+    "albumin": 157,
+    "blood_glucose": 241,
+    "blood_urea": 129,
+    "serum_creatinine": 112,
+    "hemoglobin": 238
+  },
+  "rows_out": 2500,
+  "prevalence": 0.392
+}

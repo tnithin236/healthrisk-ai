@@ -25,13 +25,14 @@ class FeatureSpec:
     options: Optional[Mapping[int, str]] = None  # code -> label (binary / category)
     help: str = ""
     valid_range: Optional[tuple] = None  # physiologically plausible range, used in cleaning
+    decimals: int = 1                    # display precision for float features
 
     def format_value(self, value) -> str:
         """Pretty-print a raw value, e.g. `145 mmHg` or `Smoker`."""
         if self.options is not None:
             return str(self.options.get(int(value), value))
         if isinstance(self.step, float):
-            text = f"{float(value):.1f}"
+            text = f"{float(value):.{self.decimals}f}"
         else:
             text = f"{float(value):.0f}"
         return f"{text} {self.unit}".strip()
@@ -49,6 +50,12 @@ class DiseaseConfig:
     engineer: Callable[[pd.DataFrame], pd.DataFrame]
     engineered_binary: tuple = ()                # engineered 0/1 columns
     thresholds: tuple = (0.33, 0.66)             # Low < t0 <= Medium < t1 <= High
+    description: str = ""                        # one-liner shown under the page title
+    engineered_desc: str = ""                    # text for the About tab
+    dataset_hint: str = ""                       # which public dataset to use for real training
+    synthetic_rows: int = 2500                   # rows of demo data (rarer diseases need more)
+    target_map: Optional[Callable] = None        # Series -> 0/1 Series (default: value > 0)
+    dedupe: bool = True                          # drop exact duplicate rows (off for mostly-binary data)
 
     @property
     def feature_names(self) -> list:

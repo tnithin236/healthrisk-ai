@@ -1,0 +1,32 @@
+{
+  "rows_in": 2515,
+  "features_used": [
+    "age",
+    "pregnancies",
+    "glucose",
+    "blood_pressure",
+    "skin_thickness",
+    "insulin",
+    "bmi",
+    "pedigree"
+  ],
+  "features_missing_from_data": [],
+  "dropped_missing_target": 0,
+  "dropped_duplicates": 15,
+  "impossible_values_set_to_nan": {
+    "glucose": 17,
+    "blood_pressure": 75,
+    "skin_thickness": 496,
+    "insulin": 618,
+    "bmi": 36
+  },
+  "missing_values_remaining": {
+    "glucose": 17,
+    "blood_pressure": 75,
+    "skin_thickness": 496,
+    "insulin": 618,
+    "bmi": 36
+  },
+  "rows_out": 2500,
+  "prevalence": 0.3504
+}

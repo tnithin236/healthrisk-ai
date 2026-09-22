@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (accuracy_score, brier_score_loss, f1_score, precision_score,
+from sklearn.metrics import (accuracy_score, average_precision_score, brier_score_loss, f1_score, precision_score,
                              recall_score, roc_auc_score)
 from sklearn.model_selection import StratifiedKFold, cross_validate
 
@@ -14,7 +14,7 @@ from .models import get_models
 from .pipeline import build_pipeline
 
 CV_SCORING = {"accuracy": "accuracy", "precision": "precision", "recall": "recall",
-              "f1": "f1", "roc_auc": "roc_auc"}
+              "f1": "f1", "roc_auc": "roc_auc", "pr_auc": "average_precision"}
 
 
 def classification_metrics(y_true, proba, threshold: float = 0.5) -> dict:
@@ -25,6 +25,7 @@ def classification_metrics(y_true, proba, threshold: float = 0.5) -> dict:
         "recall": recall_score(y_true, pred, zero_division=0),
         "f1": f1_score(y_true, pred, zero_division=0),
         "roc_auc": roc_auc_score(y_true, proba),
+        "pr_auc": average_precision_score(y_true, proba),
         "brier": brier_score_loss(y_true, proba),
     }
 
@@ -34,7 +35,8 @@ def compare_models(cfg: DiseaseConfig, X_train, y_train, X_test, y_test, *, seed
     """Returns (comparison table, {model name: pipeline fitted on the training split})."""
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
     rows, fitted = [], {}
-    for name, clf in get_models(seed).items():
+    prevalence = float(np.mean(y_train))
+    for name, clf in get_models(seed, prevalence).items():
         t0 = time.time()
         pipe = build_pipeline(cfg, X_train, clf, select=select, seed=seed)
         scores = cross_validate(pipe, X_train, y_train, cv=cv, scoring=CV_SCORING, n_jobs=1)

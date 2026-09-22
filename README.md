@@ -1,10 +1,17 @@
 # 🩺 HealthRisk AI – Disease Risk Prediction & Explainable ML System
 
-An end-to-end machine-learning project that estimates a patient's **risk probability** for a disease,
-explains **why** (SHAP), compares **six models**, and serves everything in an interactive **Streamlit dashboard**.
+An end-to-end machine-learning project that estimates a patient's **risk probability** for six conditions,
+explains **why** (SHAP), compares **six models** per condition, and serves everything in an interactive
+**Streamlit dashboard**.
 
-It is built around **one disease first (heart disease)**, with a config-driven design so that diabetes, stroke,
-kidney, liver or lung models can be added by writing one small file.
+| | Condition | Modelled on (public dataset) | Inputs |
+|---|---|---|---|
+| ❤️ | **Heart disease** | UCI Heart Disease (Cleveland) | age, sex, chest pain, BP, cholesterol, blood sugar, max heart rate, exercise angina, BMI, smoking |
+| 🩸 | **Diabetes** | Pima Indians Diabetes | age, pregnancies, glucose, BP, skin-fold, insulin, BMI, pedigree function |
+| 🧠 | **Stroke** | Kaggle Stroke Prediction | age, sex, hypertension, heart disease, glucose, BMI, smoking status |
+| 🫁 | **Lung disease** | Kaggle Lung Cancer survey | age, sex, smoking, yellow fingers, chronic disease, alcohol + 6 respiratory symptoms |
+| 🫘 | **Kidney disease** | UCI Chronic Kidney Disease | age, BP, urine gravity & albumin, glucose, urea, creatinine, hemoglobin + 4 comorbidities |
+| 🫀 | **Liver disease** | Indian Liver Patient (ILPD) | age, sex, alcohol, bilirubin (total/direct), ALP, ALT, AST, protein, albumin, A/G ratio |
 
 > ⚕️ **Educational project – not a medical device.** It estimates statistical risk from a handful of variables and
 > cannot diagnose disease.
@@ -20,110 +27,135 @@ Patient Data → Cleaning → EDA → Feature Engineering → Feature Selection
 ```bash
 pip install -r requirements.txt
 
-python train.py              # trains on built-in SYNTHETIC demo data (~1 min)
-streamlit run app.py         # opens the dashboard
-pytest -q                    # optional: run the tests
+python train.py --disease all     # all six conditions on SYNTHETIC demo data (~6 min)
+# or one at a time:  python train.py --disease heart   (heart | diabetes | stroke | lung | kidney | liver)
+
+streamlit run app.py              # pick a condition in the sidebar
+pytest -q                         # optional: 17 tests
 ```
 
-`train.py` writes the model to `models/heart_model.joblib` and all charts/tables to `reports/heart/`.
+`train.py` writes `models/<disease>_model.joblib` and all charts/tables to `reports/<disease>/`.
+Conditions you haven't trained yet appear in the dropdown as *(not trained)* with the command to run.
 
-### Use a real dataset (recommended)
+### Use a real dataset (strongly recommended)
 
-Download a heart-disease CSV (e.g. the UCI *Heart Disease* / Cleveland dataset from UCI or Kaggle), then:
+Download the matching public CSV, then train that condition on it:
 
 ```bash
-python train.py --data data/heart.csv
+python train.py --disease heart    --data data/heart.csv
+python train.py --disease diabetes --data data/diabetes.csv
+python train.py --disease stroke   --data data/healthcare-dataset-stroke-data.csv
+python train.py --disease lung     --data data/survey_lung_cancer.csv
+python train.py --disease kidney   --data data/kidney_disease.csv
+python train.py --disease liver    --data data/indian_liver_patient.csv
 ```
 
-Column names are auto-mapped (`trestbps→resting_bp`, `chol→cholesterol`, `cp→chest_pain`, `thalach→max_hr`,
-`exang→exercise_angina`, `num/target→target`, …). Features that your file doesn't have (the UCI data has no BMI or
-smoking) are simply left out, and **the dashboard form adapts automatically**.
+Column names are auto-mapped, features your file lacks are dropped (the dashboard form adapts), and these real-data
+quirks are handled for you:
 
-Check before you train:
-- **Target direction.** The code expects `1 = disease`. UCI's `num` (0–4) is binarised to `>0`. Some Kaggle copies
-  flip the target, so verify against the dataset's documentation.
-- **Chest-pain coding.** UCI uses 1–4 (auto-shifted to 0–3 here: typical, atypical, non-anginal, asymptomatic);
-  some Kaggle copies use different 0–3 meanings. Confirm the mapping matches your source.
+| Dataset | Handled automatically |
+|---|---|
+| Heart (UCI) | `num` 0–4 → 0/1; chest pain coded 1–4 → 0–3 |
+| Diabetes (Pima) | zeros in glucose / BP / skin-fold / insulin / BMI mean *not measured* → treated as missing |
+| Stroke (Kaggle) | text smoking status; `"N/A"` BMI; `"Unknown"` smoking → missing; ~5% positives → class weighting |
+| Lung (survey) | yes/no coded **1 = No, 2 = Yes**; `M/F`; `YES/NO` label; deduplication off (see below) |
+| Kidney (UCI CKD) | tabs / `?` / stray spaces in text fields; `ckd` / `notckd` label |
+| Liver (ILPD) | label coded **1 = disease, 2 = healthy**; misspelt column names (`Protiens`) |
+
+Still check before you trust a result: the **target direction** (`1 = disease`) and category codings in *your* copy
+of the file – public copies of these datasets are not all identical.
 
 ## Project layout
 
 ```
 healthrisk-ai/
-├── app.py                  # Streamlit dashboard (Predict · Model comparison · Explainability · EDA · About)
-├── train.py                # Full pipeline: clean → EDA → compare → calibrate → explain → save
+├── app.py                    # Streamlit dashboard (Predict · Model comparison · Explainability · EDA · About)
+├── train.py                  # clean → EDA → compare → calibrate → explain → save   (--disease <name>|all)
 ├── src/
-│   ├── config.py           # FeatureSpec / DiseaseConfig dataclasses
-│   ├── diseases/heart.py   # Heart schema, UCI aliases, feature engineering, synthetic data
-│   ├── data.py             # Loading, column normalisation, cleaning
-│   ├── pipeline.py         # Feature engineering + preprocessing + selection + classifier (one sklearn Pipeline)
-│   ├── models.py           # Logistic Regression, Decision Tree, Random Forest, XGBoost, SVM, KNN
-│   ├── evaluate.py         # Stratified CV + hold-out metrics
-│   ├── explain.py          # SHAP explainer (with built-in Shapley-sampling fallback)
-│   ├── plots.py            # ROC, calibration, confusion matrix, EDA, risk gauge, contribution chart
-│   └── predict.py          # Inference helpers used by the app
-└── tests/test_project.py   # Cleaning, feature engineering, explanation-additivity tests
+│   ├── config.py             # FeatureSpec / DiseaseConfig dataclasses
+│   ├── diseases/             # one file per condition: schema, aliases, feature engineering, demo data
+│   │   ├── heart.py  diabetes.py  stroke.py  lung.py  kidney.py  liver.py
+│   │   ├── _common.py        # shared helpers (bucketing, synthetic-data utilities)
+│   │   └── __init__.py       # REGISTRY
+│   ├── data.py               # loading, column normalisation, cleaning
+│   ├── pipeline.py           # feature engineering + preprocessing + selection + classifier (one Pipeline)
+│   ├── models.py             # Logistic Regression, Decision Tree, Random Forest, XGBoost, SVM, KNN
+│   ├── evaluate.py           # stratified CV + hold-out metrics
+│   ├── explain.py            # SHAP explainer (with built-in Shapley-sampling fallback)
+│   ├── plots.py              # ROC, calibration, confusion matrix, EDA, risk gauge, contribution chart
+│   └── predict.py            # inference helpers used by the app
+└── tests/test_project.py     # cleaning, real-dataset quirks, explanation additivity, all six diseases
 ```
 
 ## What the pipeline does
 
 | Stage | Details |
 |---|---|
-| **Cleaning** | Drops duplicates and rows without a label; physiologically impossible values (e.g. cholesterol = 0) become missing; a cleaning report is saved and shown in the app. |
+| **Cleaning** | Drops rows without a label; physiologically impossible values become missing; exact duplicates dropped (except lung – see below). A cleaning report is saved and shown in the app. |
 | **EDA** | Class balance, distributions by outcome, correlation heatmap, prevalence by category. |
-| **Feature engineering** | Heart-rate reserve (% of age-predicted max), blood-pressure stage, BMI class, high-cholesterol flag, risk-factor count. |
+| **Feature engineering** | Clinically motivated per disease, e.g. heart-rate reserve (heart), HOMA-IR-style index (diabetes), vascular-burden score (stroke), estimated GFR (kidney), AST/ALT ratio (liver). |
 | **Feature selection** | Random-forest importance threshold (`--no-select` to disable), fitted inside each CV fold. |
-| **Models** | Logistic Regression, Decision Tree, Random Forest, XGBoost (falls back to sklearn gradient boosting if not installed), SVM, KNN. |
-| **Evaluation** | 5-fold stratified CV on the training split → pick the winner by CV ROC-AUC → report accuracy, precision, recall, F1, ROC-AUC, Brier on a hold-out set that played no part in selection. |
-| **Calibration** | The winner is wrapped in sigmoid calibration so "70%" behaves like ~70%. |
-| **Risk levels** | Low < 33% ≤ Medium < 66% ≤ High (edit `thresholds` in the disease config). |
-| **Explainability** | SHAP (permutation explainer) run on the *whole pipeline*, so effects are attributed to raw inputs like "Cholesterol" or "Age", for any model type. Effects add up: `average risk + Σ effects = this patient's risk`. |
+| **Models** | Logistic Regression, Decision Tree, Random Forest, XGBoost (sklearn gradient boosting if not installed), SVM, KNN. |
+| **Imbalance** | If the outcome is rare (<30% or >70%) models train with class weights; probabilities are re-calibrated afterwards. |
+| **Evaluation** | 5-fold stratified CV → winner chosen on CV ROC-AUC → accuracy, precision, recall, F1, ROC-AUC, **PR-AUC**, Brier on a hold-out set that played no part in selection. |
+| **Calibration** | Sigmoid calibration so "70%" behaves like ~70%. (On stroke it cut the Brier score from 0.168 to 0.049.) |
+| **Risk levels** | Per-disease bands, e.g. heart Low < 33% ≤ Medium < 66% ≤ High; stroke Low < 5% ≤ Medium < 15% ≤ High (relative to its low base rate). Edit `thresholds` in the disease file. |
+| **Explainability** | SHAP (permutation explainer) on the *whole pipeline*, so effects are attributed to raw inputs like "Cholesterol" or "Age" for any model type. Effects add up: `average risk + Σ effects = this patient's risk`. |
 
 ### Design choices worth knowing
 
-- **No leakage:** imputation, scaling, feature selection and engineering all live inside the `Pipeline`, so cross-validation never sees validation-fold statistics, and the app can feed raw values straight into `predict_proba`.
-- **Model selection ≠ model reporting:** the winner is chosen on CV, and the test set is only used to report.
-- **Representative SHAP background:** reference rows are spaced evenly by predicted risk, so a small background set still matches the population's average risk (a random handful can be badly unrepresentative).
-- **Deployment refit:** after reporting test metrics, the final model is refit on all labelled data.
+- **No leakage:** imputation, scaling, selection and feature engineering all live inside the `Pipeline`; the app feeds raw values straight into `predict_proba`.
+- **Model selection ≠ model reporting:** the winner is chosen on CV; the test set is only used to report.
+- **Stable, representative explanations:** SHAP reference rows are spaced evenly by predicted risk and each used equally often, so the "population average" shown is exact and does not jitter between clicks.
+- **Flag threshold = risk band:** headline recall / confusion matrix treat "Medium or High" as a positive flag, matching what the dashboard tells the user.
+- **Deduplication is per-disease:** lung data is 12 yes/no columns plus an integer age, so identical rows are usually different patients; deduplicating would silently discard real data.
 
 ## Results on the bundled synthetic data
 
-> ⚠️ These come from **synthetic** data generated by `src/diseases/heart.py` (2,500 rows, ~46% prevalence). They test the
-> machinery, **not** clinical performance. Logistic Regression wins here largely because the generator's risk
-> function is close to linear; on real data the ranking will differ. Retrain on a real dataset and report *those* numbers.
+> ⚠️ These come from **synthetic** data generated in `src/diseases/*.py`. They test the machinery, **not** clinical
+> performance. Logistic Regression often wins because the generators use (near-)linear risk functions; real data will
+> rank models differently. Retrain on real datasets and report *those* numbers.
 
-| Model | CV ROC-AUC | Test accuracy | Precision | Recall | F1 | Test ROC-AUC |
-|---|---:|---:|---:|---:|---:|---:|
-| Logistic Regression | 0.881 ± 0.016 | 0.782 | 0.787 | 0.715 | 0.749 | 0.875 |
-| Gradient Boosting (XGBoost n/a) | 0.871 ± 0.013 | 0.786 | 0.801 | 0.706 | 0.751 | 0.860 |
-| SVM (RBF) | 0.869 ± 0.017 | 0.766 | 0.771 | 0.693 | 0.730 | 0.846 |
-| Random Forest | 0.867 ± 0.017 | 0.778 | 0.791 | 0.697 | 0.741 | 0.851 |
-| KNN | 0.856 ± 0.022 | 0.764 | 0.786 | 0.662 | 0.719 | 0.837 |
-| Decision Tree | 0.849 ± 0.014 | 0.776 | 0.802 | 0.675 | 0.733 | 0.829 |
+| Condition | Rows | Positive rate | Best model (by CV) | CV ROC-AUC | Test ROC-AUC | Test PR-AUC | Recall @ Medium+ |
+|---|---:|---:|---|---:|---:|---:|---:|
+| ❤️ Heart Disease | 2,500 | 45.6% | Logistic Regression | 0.881 ± 0.016 | 0.875 | 0.870 | 0.85 (≥33%) |
+| 🩸 Diabetes | 2,500 | 35.0% | Logistic Regression | 0.873 ± 0.008 | 0.867 | 0.764 | 0.82 (≥30%) |
+| 🧠 Stroke | 5,991 | 5.7% | Logistic Regression | 0.834 ± 0.019 | 0.822 | 0.228 | 0.80 (≥5%) |
+| 🫁 Lung Disease | 2,500 | 39.5% | Logistic Regression | 0.894 ± 0.022 | 0.894 | 0.837 | 0.84 (≥33%) |
+| 🫘 Kidney Disease | 2,500 | 39.2% | Gradient Boosting* | 0.998 ± 0.001 | 1.000 | 1.000 | 0.99 (≥30%) |
+| 🫀 Liver Disease | 2,500 | 43.6% | Logistic Regression | 0.854 ± 0.018 | 0.852 | 0.807 | 0.88 (≥33%) |
 
-(Your run will show `XGBoost` in place of the sklearn fallback once `xgboost` is installed.)
+\*sklearn gradient boosting stands in for XGBoost when `xgboost` isn't installed; on your machine it will say `XGBoost`.
+
+Reading the table: **stroke** looks weak on PR-AUC (0.23) because strokes are rare – a 5.7% base rate makes PR-AUC
+hard to raise, which is exactly why accuracy would be misleading there. **Kidney** is near-perfect because its
+synthetic labs separate the classes cleanly; the real UCI CKD dataset is also famously easy (models routinely exceed
+0.99 AUC), so treat a perfect score as a warning about the dataset, not proof of a great model.
 
 ## Limitations & responsible-use notes
 
 - **Association, not causation.** Explanations describe what the *model* relies on, not what causes disease.
-- **Dataset quirks become model quirks.** In the real UCI data, patients reporting *no* chest pain were more often
-  diagnosed (silent ischaemia), so the model treats "Asymptomatic" as a risk signal. The dashboard says so.
-- **Small real datasets** (Cleveland has ~300 rows) give noisy metrics – look at the CV standard deviations.
-- **Threshold matters.** The 0.5 classification threshold is a default; for screening you would tune for recall.
-- **Fairness and generalisation** are not evaluated here. Before any real use: subgroup analysis (sex, age, ethnicity),
+- **Dataset quirks become model quirks.** In the real UCI heart data, patients reporting *no* chest pain were more
+  often diagnosed (silent ischaemia), so the model treats "Asymptomatic" as a risk signal; the dashboard says so.
+- **Skewed public samples.** The Kaggle lung-cancer survey is ~87% positive and ILPD ~71%, so probabilities trained on
+  them do not represent the general population; the bands (Low/Medium/High) will look very high.
+- **Small real datasets** (Cleveland ~300 rows, CKD 400, lung survey ~300) give noisy metrics – read the CV std.
+- **The lung model is a symptom/lifestyle screener, not an imaging or biopsy tool.** Symptoms like cough are partly
+  *consequences* of disease, which flatters accuracy relative to a true pre-diagnosis risk model.
+- **Threshold matters.** For screening you would tune for recall and accept more false alarms.
+- **Fairness and generalisation are not evaluated.** Before any real use: subgroup analysis (sex, age, ethnicity),
   external validation, and clinical oversight.
 
-## Adding another disease
+## Adding another condition
 
-1. Copy `src/diseases/heart.py` → `src/diseases/diabetes.py`; define the `FeatureSpec`s (with valid ranges and UI
-   widgets), column aliases, an `engineer()` function and a `synthesize()` generator.
+1. Copy `src/diseases/liver.py` → `src/diseases/<name>.py`; define the `FeatureSpec`s (valid ranges + UI widgets),
+   column aliases, an `engineer()` function, a `synthesize()` generator and a `DiseaseConfig`
+   (set `target_map` if the label isn't "greater than 0 = disease", `dedupe=False` for mostly-binary data).
 2. Register it in `src/diseases/__init__.py`.
-3. `python train.py --disease diabetes --data data/diabetes.csv` – the dashboard picks it up automatically.
-
-Suggested public datasets: Pima Indians Diabetes, Kaggle Stroke Prediction, Indian Liver Patient (ILPD),
-Chronic Kidney Disease (UCI).
+3. `python train.py --disease <name>` – the dashboard picks it up automatically.
 
 ## Ideas to extend
 
 Hyper-parameter search (`RandomizedSearchCV`), threshold optimisation for recall, SHAP dependence plots,
-what-if sliders ("what if cholesterol dropped to 200?"), subgroup fairness report, Docker + Streamlit Cloud deployment,
-MLflow experiment tracking.
+what-if sliders ("what if cholesterol dropped to 200?"), subgroup fairness report, multi-condition patient summary,
+Docker + Streamlit Cloud deployment, MLflow experiment tracking.

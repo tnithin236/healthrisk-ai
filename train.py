@@ -19,10 +19,10 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 
 from src.data import clean, load_data
-from src.diseases import get_disease
+from src.diseases import REGISTRY, get_disease
 from src.evaluate import classification_metrics, compare_models
 from src.explain import RiskExplainer
-from src.models import get_models
+from src.models import get_models, is_imbalanced
 from src.pipeline import build_pipeline, selected_feature_names
 from src.plots import (plot_calibration, plot_confusion, plot_eda, plot_global_importance,
                        plot_roc)
@@ -33,9 +33,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--disease", default="heart")
+    ap.add_argument("--disease", default="heart", help=f"One of {sorted(REGISTRY)} or 'all'.")
     ap.add_argument("--data", default=None, help="CSV path. Omit to use synthetic demo data.")
-    ap.add_argument("--n-synthetic", type=int, default=2500)
+    ap.add_argument("--n-synthetic", type=int, default=None,
+                    help="Rows of synthetic data (default: per-disease).")
     ap.add_argument("--test-size", type=float, default=0.2)
     ap.add_argument("--cv", type=int, default=5)
     ap.add_argument("--seed", type=int, default=42)
@@ -43,7 +44,17 @@ def main():
     ap.add_argument("--skip-eda", action="store_true")
     args = ap.parse_args()
 
-    cfg = get_disease(args.disease)
+    if args.disease == "all":
+        if args.data:
+            ap.error("--data cannot be combined with --disease all (each disease needs its own file).")
+        for key in REGISTRY:
+            print(f"\n{'=' * 70}\n{REGISTRY[key].icon}  {REGISTRY[key].title}\n{'=' * 70}")
+            train_one(get_disease(key), args)
+    else:
+        train_one(get_disease(args.disease), args)
+
+
+def train_one(cfg, args):
     out = report_dir(cfg.key)
     out.mkdir(parents=True, exist_ok=True)
     MODEL_DIR.mkdir(exist_ok=True)
@@ -68,6 +79,8 @@ def main():
         X, y, test_size=args.test_size, stratify=y, random_state=args.seed)
 
     # 4-6. Feature engineering/selection happen inside the pipeline; compare models
+    if is_imbalanced(float(y_train.mean())):
+        print(f"      note: imbalanced outcome ({y_train.mean():.1%} positive) -> class-weighted training")
     print(f"[3/7] Comparing models ({args.cv}-fold CV on {len(X_train)} rows, "
           f"then hold-out test on {len(X_test)}) …")
     table, fitted = compare_models(cfg, X_train, y_train, X_test, y_test, seed=args.seed,
@@ -81,22 +94,24 @@ def main():
 
     # 7. Calibrate so that '70%' behaves like ~70% -----------------------------
     print("[5/7] Calibrating probabilities …")
-    make = lambda: build_pipeline(cfg, X_train, get_models(args.seed)[best_name],
-                                  select=not args.no_select, seed=args.seed)
+    models_train = lambda: get_models(args.seed, float(y_train.mean()))[best_name]
+    make = lambda: build_pipeline(cfg, X_train, models_train(), select=not args.no_select, seed=args.seed)
     calibrated = CalibratedClassifierCV(make(), method="sigmoid", cv=5).fit(X_train, y_train)
     p_raw = fitted[best_name].predict_proba(X_test)[:, 1]
     p_cal = calibrated.predict_proba(X_test)[:, 1]
-    final_metrics = classification_metrics(y_test, p_cal)
+    flag_t = cfg.thresholds[0]          # "Medium or High" = flagged; consistent with the app's risk bands
+    final_metrics = classification_metrics(y_test, p_cal, threshold=flag_t)
+    final_metrics["threshold"] = flag_t
     print(f"      Brier score: raw {classification_metrics(y_test, p_raw)['brier']:.4f} "
           f"-> calibrated {final_metrics['brier']:.4f}")
     plot_calibration({"Uncalibrated": (y_test, p_raw), "Calibrated": (y_test, p_cal)},
                      out / "calibration.png")
-    plot_confusion(y_test, p_cal, out / "confusion_matrix.png")
+    plot_confusion(y_test, p_cal, out / "confusion_matrix.png", threshold=flag_t)
 
     # Deploy: refit on ALL labelled data (test metrics above come from the train-only model)
     print("[6/7] Refitting on all data for deployment …")
     deployed = CalibratedClassifierCV(
-        build_pipeline(cfg, X, get_models(args.seed)[best_name],
+        build_pipeline(cfg, X, get_models(args.seed, float(y.mean()))[best_name],
                        select=not args.no_select, seed=args.seed),
         method="sigmoid", cv=5).fit(X, y)
 

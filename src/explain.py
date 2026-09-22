@@ -80,17 +80,21 @@ class RiskExplainer:
 
     # ------------------------------------------------------------------ #
     def _sampling(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Monte-Carlo Shapley: walk from a random background row to x, switching
+        """Monte-Carlo Shapley: walk from a background row to x, switching
         features on in a random order, and credit each feature with the change in
         predicted probability it caused. Averaged over many (row, order) paths."""
-        n_feat, P = len(self.features), self.n_paths
+        n_feat = len(self.features)
+        # Use every background row equally often -> the baseline is EXACTLY mean(f(background)),
+        # identical on every call (random starting rows made it jump by several points).
+        reps = max(1, round(self.n_paths / len(self.bg)))
+        starts = np.repeat(self.bg, reps, axis=0)
+        P = len(starts)
         out = np.zeros((len(X), n_feat))
         base = np.zeros(len(X))
         idx = np.arange(P)
         for i, x in enumerate(X):
-            start = self.bg[self.rng.integers(0, len(self.bg), P)]
             perms = np.argsort(self.rng.random((P, n_feat)), axis=1)
-            cur = start.copy()
+            cur = starts.copy()
             path = np.empty((P, n_feat + 1, n_feat))
             path[:, 0, :] = cur
             for k in range(n_feat):

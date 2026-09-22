@@ -12,11 +12,13 @@ _TEXT_MAP = {
     "m": 1, "male": 1, "f": 0, "female": 0,
     "yes": 1, "y": 1, "true": 1, "no": 0, "n": 0, "false": 0,
     "presence": 1, "absence": 0, "disease": 1, "positive": 1, "negative": 0,
+    "ckd": 1, "notckd": 0,                                   # UCI kidney labels
+    "never smoked": 0, "formerly smoked": 1, "smokes": 2,    # Kaggle stroke smoking_status
 }
 
 
 def _text_to_numeric(s: pd.Series) -> pd.Series:
-    if s.dtype == object or str(s.dtype).startswith("string"):
+    if pd.api.types.is_object_dtype(s) or pd.api.types.is_string_dtype(s):
         mapped = s.astype(str).str.strip().str.lower().map(_TEXT_MAP)
         s = mapped.where(mapped.notna(), pd.to_numeric(s, errors="coerce"))
     return pd.to_numeric(s, errors="coerce")
@@ -39,20 +41,27 @@ def normalize_columns(cfg: DiseaseConfig, df: pd.DataFrame) -> pd.DataFrame:
                 vals, keys = set(df[spec.name].dropna().unique()), set(spec.options)
                 if vals - keys and vals <= {k + 1 for k in keys}:
                     df[spec.name] = df[spec.name] - 1
+            # Survey convention: yes/no coded 1/2 (1 = No, 2 = Yes). Sex is left alone (ambiguous).
+            elif spec.kind == "binary" and spec.name != "sex":
+                if set(df[spec.name].dropna().unique()) == {1, 2}:
+                    df[spec.name] = df[spec.name] - 1
 
     if cfg.target in df.columns:
         t = _text_to_numeric(df[cfg.target])
-        df[cfg.target] = (t > 0).astype(float).where(t.notna())   # UCI 'num' 0-4 -> 0/1
+        if cfg.target_map is not None:                            # e.g. ILPD: 1 = disease, 2 = healthy
+            df[cfg.target] = cfg.target_map(t)
+        else:
+            df[cfg.target] = (t > 0).astype(float).where(t.notna())   # UCI 'num' 0-4 -> 0/1
     return df
 
 
-def load_data(cfg: DiseaseConfig, path: str | None = None, n_synthetic: int = 2500,
+def load_data(cfg: DiseaseConfig, path: str | None = None, n_synthetic: int | None = None,
               seed: int = 42) -> tuple[pd.DataFrame, str]:
     """Return (raw dataframe, source label)."""
     if path:
         df = pd.read_csv(path)
         return normalize_columns(cfg, df), f"file:{Path(path).name}"
-    return normalize_columns(cfg, cfg.synthesize(n_synthetic, seed)), "synthetic"
+    return normalize_columns(cfg, cfg.synthesize(n_synthetic or cfg.synthetic_rows, seed)), "synthetic"
 
 
 def clean(cfg: DiseaseConfig, df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -76,7 +85,7 @@ def clean(cfg: DiseaseConfig, df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     report["dropped_missing_target"] = int(n - len(df))
 
     n = len(df)
-    df = df.drop_duplicates()
+    df = df.drop_duplicates() if cfg.dedupe else df
     report["dropped_duplicates"] = int(n - len(df))
 
     out_of_range = {}

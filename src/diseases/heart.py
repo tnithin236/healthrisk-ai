@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import DiseaseConfig, FeatureSpec
+from ._common import flag as _flag, ordinal as _ordinal, sigmoid as _sigmoid
 
 CHEST_PAIN = {0: "Typical angina", 1: "Atypical angina", 2: "Non-anginal pain", 3: "Asymptomatic"}
 
@@ -53,16 +54,6 @@ ALIASES = {
 # Feature engineering (runs inside the sklearn Pipeline, so it is applied
 # identically at training time and at prediction time).
 # --------------------------------------------------------------------------- #
-def _ordinal(s: pd.Series, bins) -> pd.Series:
-    """Bucket a numeric series into 0..len(bins), keeping NaN as NaN."""
-    codes = np.digitize(s.to_numpy(dtype=float), bins)
-    return pd.Series(codes, index=s.index, dtype=float).where(s.notna())
-
-
-def _flag(cond: pd.Series, source: pd.Series) -> pd.Series:
-    return cond.astype(float).where(source.notna())
-
-
 def engineer(df: pd.DataFrame) -> pd.DataFrame:
     """Add clinically motivated features. Tolerates missing columns and NaNs."""
     df = df.copy()
@@ -89,10 +80,6 @@ def engineer(df: pd.DataFrame) -> pd.DataFrame:
 # --------------------------------------------------------------------------- #
 # Synthetic demo data
 # --------------------------------------------------------------------------- #
-def _sigmoid(z):
-    return 1.0 / (1.0 + np.exp(-z))
-
-
 def synthesize(n: int = 2500, seed: int = 42) -> pd.DataFrame:
     """Generate a realistic-looking (but entirely fake) heart-disease dataset.
 
@@ -149,4 +136,7 @@ HEART = DiseaseConfig(
     engineer=engineer,
     engineered_binary=("chol_high",),
     thresholds=(0.33, 0.66),
+    description="Estimates the risk of coronary heart disease from vitals, exercise-test results and lifestyle.",
+    engineered_desc="heart-rate reserve, blood-pressure stage, BMI class, high-cholesterol flag, risk-factor count",
+    dataset_hint="UCI Heart Disease (Cleveland) - heart.csv",
 )
