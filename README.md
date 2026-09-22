@@ -1,5 +1,8 @@
 # 🩺 HealthRisk AI – Disease Risk Prediction & Explainable ML System
 
+<img width="1917" height="1020" alt="Screenshot 2026-09-22 175310" src="https://github.com/user-attachments/assets/05767668-83a8-4e41-b4a7-4f698dcef519" />
+
+
 An end-to-end machine-learning project that estimates a patient's **risk probability** for six conditions,
 explains **why** (SHAP), compares **six models** per condition, and serves everything in an interactive
 **Streamlit dashboard**.
